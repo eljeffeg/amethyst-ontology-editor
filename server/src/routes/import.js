@@ -117,7 +117,7 @@ function httpGet(url, redirectsLeft = 5) {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
           if (redirectsLeft <= 0) return reject(new Error(`Too many redirects fetching ${url}`));
-          const next = new URL(res.headers.location, url).toString();
+          const next = validateFetchUrl(new URL(res.headers.location, url).toString());
           return resolve(httpGet(next, redirectsLeft - 1));
         }
         if (res.statusCode < 200 || res.statusCode >= 300) {

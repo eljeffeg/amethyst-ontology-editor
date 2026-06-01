@@ -21,6 +21,11 @@ async function ghFetch(token, method, path, body) {
   if (typeof path !== "string" || !path.startsWith("/")) {
     throw new Error(`[github] invalid API path: ${String(path).slice(0, 80)}`);
   }
+  const fullUrl = `${GITHUB_API}${path}`;
+  // SSRF guard: verify the constructed URL resolves to the expected host.
+  if (new URL(fullUrl).hostname !== "api.github.com") {
+    throw new Error(`[github] SSRF guard: unexpected host in constructed URL`);
+  }
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
@@ -29,7 +34,7 @@ async function ghFetch(token, method, path, body) {
   };
   if (body) headers["Content-Type"] = "application/json";
 
-  const res = await fetch(`${GITHUB_API}${path}`, {
+  const res = await fetch(fullUrl, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,

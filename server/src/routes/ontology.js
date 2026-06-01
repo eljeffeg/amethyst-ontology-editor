@@ -1720,7 +1720,7 @@ router.get(
             // Best-effort — degrade gracefully.
             console.warn(
               `[linked-context] reverse-ref query failed for search=${String(searchId)
-                .replace(/[\r\n]/g, " ")
+                .replace(/[\r\n%]/g, " ")
                 .slice(0, 80)}:`,
               _err?.message || _err,
             );
@@ -2063,7 +2063,7 @@ router.get(
       } catch (err) {
         console.warn(
           `[linked-context] error querying ${String(searchId)
-            .replace(/[\r\n]/g, " ")
+            .replace(/[\r\n%]/g, " ")
             .slice(0, 80)}:`,
           err.message,
         );

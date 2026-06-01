@@ -12,12 +12,14 @@ const FORMAT = "text/turtle";
 const ONTO_DIR = path.join(DATA_DIR, "ontologies");
 
 // Guard against path traversal: confirm the resolved path stays under DATA_DIR.
+// Returns the resolved (safe) path so callers MUST use the return value for I/O.
 function assertSafePath(filePath) {
   const resolved = path.resolve(filePath);
   const base = path.resolve(DATA_DIR);
   if (resolved !== base && !resolved.startsWith(base + path.sep)) {
     throw new Error("[rdfStore] path traversal blocked");
   }
+  return resolved;
 }
 
 // Construct the named graph IRI we use to isolate each ontology.
@@ -250,11 +252,11 @@ export async function persistOntology(ontologyId) {
     const filePath = isBranch
       ? getBranchFilePath(ontologyId, record.branch_of)
       : graphFileFor(ontologyId);
-    assertSafePath(filePath);
+    const safeFilePath = assertSafePath(filePath);
 
     // Ensure the destination directory exists (worktrees are created by git;
     // on first persist after a server restart the dir should already be there).
-    const dir = path.dirname(filePath);
+    const dir = path.dirname(safeFilePath);
     await fs.promises.mkdir(dir, { recursive: true });
 
     // Guard: never overwrite a non-empty .ttl file with empty content.
@@ -264,7 +266,7 @@ export async function persistOntology(ontologyId) {
     if (!text.trim()) {
       let existing = "";
       try {
-        existing = (await fs.promises.readFile(filePath, "utf-8")).trim();
+        existing = (await fs.promises.readFile(safeFilePath, "utf-8")).trim();
       } catch {}
       if (existing) {
         console.warn(
@@ -275,11 +277,11 @@ export async function persistOntology(ontologyId) {
       }
     }
 
-    await fs.promises.writeFile(filePath, text, "utf-8");
+    await fs.promises.writeFile(safeFilePath, text, "utf-8");
   } catch (err) {
     console.warn(
       `[rdfStore] persist(${String(ontologyId)
-        .replace(/[\r\n]/g, " ")
+        .replace(/[\r\n%]/g, " ")
         .slice(0, 80)}) failed:`,
       err.message,
     );
@@ -344,13 +346,13 @@ export async function writeFileToDisk(ontologyId) {
     const filePath = isBranch
       ? getBranchFilePath(ontologyId, record.branch_of)
       : graphFileFor(ontologyId);
-    assertSafePath(filePath);
+    const safeFilePath = assertSafePath(filePath);
 
     // Guard: never overwrite a non-empty file with empty content.
     if (!text.trim()) {
       let existing = "";
       try {
-        existing = (await fs.promises.readFile(filePath, "utf-8")).trim();
+        existing = (await fs.promises.readFile(safeFilePath, "utf-8")).trim();
       } catch {}
       if (existing) {
         console.warn(
@@ -360,14 +362,14 @@ export async function writeFileToDisk(ontologyId) {
       }
     }
 
-    const dir = path.dirname(filePath);
+    const dir = path.dirname(safeFilePath);
     await fs.promises.mkdir(dir, { recursive: true });
 
-    await fs.promises.writeFile(filePath, text, "utf-8");
+    await fs.promises.writeFile(safeFilePath, text, "utf-8");
   } catch (err) {
     console.warn(
       `[rdfStore] writeFileToDisk(${String(ontologyId)
-        .replace(/[\r\n]/g, " ")
+        .replace(/[\r\n%]/g, " ")
         .slice(0, 80)}) failed:`,
       err.message,
     );
@@ -534,10 +536,9 @@ export async function dropOntologyGraph(ontologyId) {
   } catch (err) {
     console.warn(`[rdfStore] drop graph failed:`, err.message);
   }
-  const file = graphFileFor(ontologyId);
-  assertSafePath(file);
+  const safeFile = assertSafePath(graphFileFor(ontologyId));
   try {
-    await fs.promises.unlink(file);
+    await fs.promises.unlink(safeFile);
   } catch {}
 }
 
@@ -1227,12 +1228,9 @@ function turtleTerm(term, nsToPrefix) {
         raw.includes("\n") || raw.includes("\r") || (raw.match(/"/g) || []).length > 1;
       let base;
       if (useTriple) {
-        let esc = raw.replace(/\\/g, "\\\\").replace(/\0/g, "\\u0000").replace(/"""/g, '\\"\\"\\"');
-        // If the content ends with `"` (or `""`), appending the closing `"""`
-        // produces `""""` (or `"""""`) — the Turtle parser closes at the FIRST
-        // `"""`, leaving a stray `"` that corrupts the rest of the file.
-        // Escape any trailing unescaped `"` chars to prevent this.
-        esc = esc.replace(/"+$/, (m) => m.replace(/"/g, '\\"'));
+        // Escape ALL double-quotes so no sequence of `"` chars can close the
+        // triple-quoted literal prematurely.
+        const esc = raw.replace(/\\/g, "\\\\").replace(/\0/g, "\\u0000").replace(/"/g, '\\"');
         base = `"""${esc}"""`;
       } else {
         const esc = raw

@@ -103,7 +103,7 @@ export async function deleteBranch(branchId) {
   }
   // Sanitize branchId for log messages to prevent log injection
   const safeId = String(branchId)
-    .replace(/[\r\n]/g, " ")
+    .replace(/[\r\n%]/g, " ")
     .slice(0, 80);
   try {
     await fs.promises.rm(safeDir, { recursive: true, force: true });
