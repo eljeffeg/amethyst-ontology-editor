@@ -22,6 +22,7 @@ import {
   getOntologySubjectIri,
   getStore,
   graphIriFor,
+  loadRdfTextInWorker,
   normalizeRdfNamespaces,
   persistOntology,
   reloadOntologyFromDisk,
@@ -224,7 +225,8 @@ async function loadUrlWithImportsAsSiblings(
 
   const format = ctFormat || detectFormat(effectiveFilename, null);
 
-  store.load(normalizeRdfNamespaces(text), { format, to_graph_name: graphNode });
+  const _nq1 = await loadRdfTextInWorker(normalizeRdfNamespaces(text), format, graphNode.value);
+  store.load(_nq1, { format: "application/n-quads", to_graph_name: graphNode });
 
   return _createSiblingsForImports(store, graphNode, projectId, uid, visited);
 }
@@ -423,7 +425,8 @@ async function importIntoExistingOntology(req, res) {
         );
       }
       const format = ctFmt || detectFormat(effectiveFilename, null);
-      store.load(normalizeRdfNamespaces(text), { format, to_graph_name: gNode });
+      const _nq2 = await loadRdfTextInWorker(normalizeRdfNamespaces(text), format, g);
+      store.load(_nq2, { format: "application/n-quads", to_graph_name: gNode });
       // Invalidate stale cached SPARQL results so the freshly-loaded data is
       // visible immediately to all subsequent reads (meta, classes, graph, etc.).
       cacheInvalidate(oid);
@@ -437,7 +440,8 @@ async function importIntoExistingOntology(req, res) {
       const { text, format, filename: fn } = readUpload(req);
       filename = fn;
       if (!text) return res.status(400).json({ error: "no file, text, or url provided" });
-      store.load(normalizeRdfNamespaces(text), { format, to_graph_name: gNode });
+      const _nq3 = await loadRdfTextInWorker(normalizeRdfNamespaces(text), format, g);
+      store.load(_nq3, { format: "application/n-quads", to_graph_name: gNode });
       // Invalidate stale cached SPARQL results so the freshly-loaded data is
       // visible immediately to all subsequent reads (meta, classes, graph, etc.).
       cacheInvalidate(oid);
@@ -528,8 +532,9 @@ async function importAsNewOntology(req, res) {
     const { text, format, filename: fn } = readUpload(req);
     filename = fn;
     if (!text) return res.status(400).json({ error: "no file, text, or url provided" });
-    loadFn = (store, gNode) => {
-      store.load(normalizeRdfNamespaces(text), { format, to_graph_name: gNode });
+    loadFn = async (store, gNode) => {
+      const _nq4 = await loadRdfTextInWorker(normalizeRdfNamespaces(text), format, gNode.value);
+      store.load(_nq4, { format: "application/n-quads", to_graph_name: gNode });
       return resolveOwlImportsAsSiblings(store, gNode, projectId, uid);
     };
   }
@@ -645,8 +650,9 @@ async function importAsNewProject(req, res) {
     const { text, format, filename: fn } = readUpload(req);
     filename = fn;
     if (!text) return res.status(400).json({ error: "no file, text, or url provided" });
-    prepareLoad = (projectId) => (store, gNode) => {
-      store.load(normalizeRdfNamespaces(text), { format, to_graph_name: gNode });
+    prepareLoad = (projectId) => async (store, gNode) => {
+      const _nq5 = await loadRdfTextInWorker(normalizeRdfNamespaces(text), format, gNode.value);
+      store.load(_nq5, { format: "application/n-quads", to_graph_name: gNode });
       return resolveOwlImportsAsSiblings(store, gNode, projectId, uid);
     };
   }

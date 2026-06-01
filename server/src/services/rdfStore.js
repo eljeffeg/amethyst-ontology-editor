@@ -1,11 +1,34 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import oxigraph from "oxigraph";
 import { DATA_DIR, getOntology, listOntologies } from "./authDb.js";
 import { getBranchBasePath, getBranchFilePath, initOntologyRepo } from "./ontologyGit.js";
 import { cacheGet, cacheInvalidate, cacheSet } from "./queryCache.js";
 
 const { Store, NamedNode, BlankNode, Literal, DefaultGraph, Quad, namedNode, literal } = oxigraph;
+
+const _workerUrl = new URL("./rdfLoadWorker.js", import.meta.url);
+
+/**
+ * Parse RDF text in a worker thread (non-blocking) and return N-Quads.
+ * Offloads the slow synchronous Oxigraph parse (Turtle/RDF-XML/JSON-LD) so the
+ * main event loop stays responsive while large ontologies are loaded.
+ */
+export function loadRdfTextInWorker(text, format, graphIri) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(_workerUrl, { workerData: { text, format, graphIri } });
+    worker.once("message", ({ ok, nquads, error }) => {
+      worker.terminate().catch(() => {});
+      if (!ok) return reject(new Error(error));
+      resolve(nquads);
+    });
+    worker.once("error", (err) => {
+      worker.terminate().catch(() => {});
+      reject(err);
+    });
+  });
+}
 
 let store;
 const FORMAT = "text/turtle";
@@ -456,7 +479,7 @@ export async function reloadOntologyFromDisk(ontologyId) {
 // Load ontology content from a raw Turtle/RDF string into the named graph.
 // Used by GitHub sync to import file content fetched from the API.
 // Pass { replace: true } to clear the existing graph first.
-export function loadOntologyFromText(ontologyId, text, { replace = false, format = FORMAT } = {}) {
+export async function loadOntologyFromText(ontologyId, text, { replace = false, format = FORMAT } = {}) {
   if (!store) throw new Error("rdfStore not initialized");
   const g = graphIriFor(ontologyId);
   const gNode = namedNode(g);
@@ -466,7 +489,8 @@ export function loadOntologyFromText(ontologyId, text, { replace = false, format
     } catch {}
   }
   const normalized = normalizeRdfNamespaces(text);
-  store.load(normalized, { format, to_graph_name: gNode });
+  const nquads = await loadRdfTextInWorker(normalized, format, g);
+  store.load(nquads, { format: "application/n-quads", to_graph_name: gNode });
   trackedOntologyIds.add(ontologyId);
   schedulePersist(ontologyId, 2000);
 }
