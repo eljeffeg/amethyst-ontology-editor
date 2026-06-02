@@ -1720,20 +1720,18 @@ function OntologyRow({
                       Reload
                     </button>
                   )}
-                  {/* Delete ontology — editor+, non-imported */}
-                  {!ontology.is_imported && (
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-red-400 hover:bg-red-950/30 text-left"
-                      onClick={() => {
-                        setActionsOpen(false);
-                        deleteOntology();
-                      }}
-                    >
-                      <X size={15} aria-hidden="true" className="-mr-0.5 ml-0.5" />
-                      Delete {isBranch ? "Branch" : "Ontology"}
-                    </button>
-                  )}
+                  {/* Delete ontology — editor+ */}
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-red-400 hover:bg-red-950/30 text-left"
+                    onClick={() => {
+                      setActionsOpen(false);
+                      deleteOntology();
+                    }}
+                  >
+                    <X size={15} aria-hidden="true" className="-mr-0.5 ml-0.5" />
+                    Delete {isBranch ? "Branch" : "Ontology"}
+                  </button>
                 </div>
               )}
 
