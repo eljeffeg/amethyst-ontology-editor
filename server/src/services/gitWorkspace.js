@@ -51,7 +51,8 @@ export async function ensureWorkspace(userId, token, owner, repo, branch) {
 export async function writeOntologyToWorkspace(userId, owner, repo, branchName, filePath, content) {
   const wsPath = getWorkspacePath(userId, owner, repo);
   // Create new branch from HEAD (which is the tracked base branch after ensureWorkspace).
-  await execFile("git", ["-C", wsPath, "checkout", "-b", branchName], { env: gitEnv() });
+  // Use -B so a stale local branch from a prior push attempt is reset rather than erroring.
+  await execFile("git", ["-C", wsPath, "checkout", "-B", branchName], { env: gitEnv() });
 
   // Write the file, creating parent dirs as needed.
   const fullPath = path.join(wsPath, filePath);
@@ -96,7 +97,21 @@ export async function commitFile(userId, owner, repo, filePath, commitMessage, a
     GIT_COMMITTER_EMAIL: author.email,
   };
   await execFile("git", ["-C", wsPath, "add", filePath], { env });
-  const { stdout } = await execFile("git", ["-C", wsPath, "commit", "-m", commitMessage], { env });
+  let stdout;
+  try {
+    ({ stdout } = await execFile("git", ["-C", wsPath, "commit", "-m", commitMessage], { env }));
+  } catch (err) {
+    // "nothing to commit" means the workspace already has identical content.
+    // Treat as success — the push step will still advance the remote ref if needed.
+    const out = (err.stdout || "") + (err.stderr || "");
+    if (out.includes("nothing to commit") || out.includes("nothing added to commit")) {
+      const { stdout: headOut } = await execFile("git", ["-C", wsPath, "rev-parse", "HEAD"], {
+        env: gitEnv(),
+      });
+      return { sha: headOut.trim() };
+    }
+    throw err;
+  }
   // Extract commit SHA from output like "[branch abc1234] message"
   const shaMatch = stdout.match(/\[[\w/.-]+ ([0-9a-f]+)\]/);
   return { sha: shaMatch?.[1] || "unknown" };

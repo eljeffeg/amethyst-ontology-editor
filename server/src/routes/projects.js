@@ -635,6 +635,7 @@ router.post(
       const byIriGroups = new Map();
       for (const o of freshOntologies) {
         if (!o.iri) continue;
+        if (o.branch_of) continue; // branches intentionally share parent IRI — never dedup them
         if (!byIriGroups.has(o.iri)) byIriGroups.set(o.iri, []);
         byIriGroups.get(o.iri).push(o);
       }
