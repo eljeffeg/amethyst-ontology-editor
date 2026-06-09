@@ -339,7 +339,24 @@ const STYLES = [
     selector: ".layout-hidden",
     style: { display: "none" },
   },
+
+  // ── virtual root: invisible 1×1 node used only during dagre layout to give
+  // orphan nodes (no subClassOf edges) a proper rank assignment so they appear
+  // above the tree rather than mixing with leaf children.
+  {
+    selector: "node[?virtualRoot]",
+    style: {
+      opacity: 0,
+      width: 1,
+      height: 1,
+      "text-opacity": 0,
+      events: "no",
+    },
+  },
 ];
+
+// Unique ID for the transient virtual root node used in syncVirtualRoot.
+const VROOT_ID = "_vroot_dagre_";
 
 const LAYOUTS = {
   verticalTree: {
@@ -354,14 +371,15 @@ const LAYOUTS = {
     fit: true,
     padding: 50,
     sort: (a, b) => {
-      const nameA = (a.prefLabel || a.label || a.id()).toLowerCase();
-      const nameB = (b.prefLabel || b.label || b.id()).toLowerCase();
+      const nameA = (a.data("label") || a.id()).toLowerCase();
+      const nameB = (b.data("label") || b.id()).toLowerCase();
       return nameA.localeCompare(nameB); // Alphabetical A → Z
     },
   },
   horizontalTree: {
     name: "dagre",
     rankDir: "RL",
+    ranker: "tight-tree",
     nodeSep: 50,
     rankSep: 150,
     edgeSep: 22,
@@ -370,8 +388,8 @@ const LAYOUTS = {
     fit: true,
     padding: 50,
     sort: (a, b) => {
-      const nameA = (a.prefLabel || a.label || a.id()).toLowerCase();
-      const nameB = (b.prefLabel || b.label || b.id()).toLowerCase();
+      const nameA = (a.data("label") || a.id()).toLowerCase();
+      const nameB = (b.data("label") || b.id()).toLowerCase();
       return nameA.localeCompare(nameB); // Alphabetical A → Z
     },
   },
@@ -514,6 +532,53 @@ function getForceLayout(nodeCount, edgeCount) {
     fit: true,
     padding: Math.round(lerp(50, 30, sizeT)),
   };
+}
+
+/**
+ * Before running a dagre tree layout, inject a hidden virtual root node and
+ * connect every orphan (no visible subClassOf edges) to it as a child.
+ * This gives orphans a dagre rank one step below the root rather than rank 0
+ * (leaf rank), so they appear as their own group at the top of the tree
+ * rather than mixing with the deepest leaf children.
+ *
+ * For non-tree layouts (force / grid / concentric) this is a no-op and any
+ * stale virtual root left over from a previous tree run is cleaned up.
+ */
+function syncVirtualRoot(cy, layoutName) {
+  // Remove any stale virtual root from a previous run first.
+  const prev = cy.getElementById(VROOT_ID);
+  if (prev.length) {
+    cy.edges("[?virtualRoot]").remove();
+    prev.remove();
+  }
+
+  if (layoutName !== "verticalTree" && layoutName !== "horizontalTree") return;
+
+  // Find visible orphan nodes: no connected visible subClassOf edge.
+  const orphans = cy.nodes(":visible").filter(
+    (n) => !n.connectedEdges('[kind = "subClassOf"]').some((e) => e.visible()),
+  );
+  if (!orphans.length) return;
+
+  // Add the invisible root node.
+  cy.add({ data: { id: VROOT_ID, label: "", kind: "class", virtualRoot: true } });
+
+  // Add a subClassOf edge from each orphan (child) to the virtual root (parent).
+  // dagre interprets source=child, target=parent and assigns the root the
+  // highest rank so orphans land one rank below it — away from the leaf row.
+  const edges = [];
+  orphans.forEach((n) => {
+    edges.push({
+      data: {
+        id: `_vr_${n.id()}`,
+        source: n.id(),
+        target: VROOT_ID,
+        kind: "subClassOf",
+        virtualRoot: true,
+      },
+    });
+  });
+  if (edges.length) cy.add(edges);
 }
 
 /**
@@ -832,11 +897,56 @@ export default function GraphView() {
     });
 
     // After every layout run, remove the temporary .layout-hidden class from
-    // self-loop edges.  We add that class just before each layout.run() so
-    // the layout algorithm never asks for the bounding box of a self-loop edge
-    // (which would trigger Cytoscape's "invalid endpoints" warning).
+    // self-loop edges and the virtual root node/edges (added by syncVirtualRoot
+    // before each dagre run to give orphan nodes a proper rank assignment).
     cy.on("layoutstop", () => {
       cy.elements(".layout-hidden").removeClass("layout-hidden");
+      const vr = cy.getElementById(VROOT_ID);
+      if (vr.length) {
+        // Sort only the orphan nodes (vroot children) A→Z by swapping their X
+        // positions. dagre's crossing-minimisation sets within-rank order
+        // independently of the sort comparator, so we fix it post-layout.
+        const vrEdges = cy.edges("[?virtualRoot]");
+        const orphans = vrEdges
+          .map((e) => cy.getElementById(e.data("source")))
+          .filter((n) => n.length);
+        if (orphans.length > 1) {
+          const isVertical = layoutRef.current === "verticalTree";
+          const gap = isVertical ? 55 : 50; // nodeSep for each layout
+          const sorted = [...orphans].sort((a, b) => {
+            const na = (a.data("label") || a.id()).toLowerCase();
+            const nb = (b.data("label") || b.id()).toLowerCase();
+            return na.localeCompare(nb);
+          });
+          cy.batch(() => {
+            if (isVertical) {
+              // Space along X with equal gaps between bounding boxes.
+              const totalW = sorted.reduce((s, n) => s + n.outerWidth(), 0);
+              const totalSpan = totalW + gap * (sorted.length - 1);
+              const centerX =
+                orphans.reduce((s, n) => s + n.position("x"), 0) / orphans.length;
+              let x = centerX - totalSpan / 2;
+              sorted.forEach((n) => {
+                n.position("x", x + n.outerWidth() / 2);
+                x += n.outerWidth() + gap;
+              });
+            } else {
+              // horizontalTree: same rank = same X, so space along Y.
+              const totalH = sorted.reduce((s, n) => s + n.outerHeight(), 0);
+              const totalSpan = totalH + gap * (sorted.length - 1);
+              const centerY =
+                orphans.reduce((s, n) => s + n.position("y"), 0) / orphans.length;
+              let y = centerY - totalSpan / 2;
+              sorted.forEach((n) => {
+                n.position("y", y + n.outerHeight() / 2);
+                y += n.outerHeight() + gap;
+              });
+            }
+          });
+        }
+        vrEdges.remove();
+        vr.remove();
+      }
     });
 
     return () => {
@@ -887,6 +997,7 @@ export default function GraphView() {
       cy.batch(() => {
         // ── Node visibility (query filter) ────────────────────────────────────
         cy.nodes().forEach((n) => {
+          if (n.data("virtualRoot")) return;
           const match =
             !ql || n.data("label").toLowerCase().includes(ql) || n.id().toLowerCase().includes(ql);
           n.style("display", match ? "element" : "none");
@@ -902,6 +1013,7 @@ export default function GraphView() {
         // Therefore: if sourceOntologyId is null AND linked is not set, the
         // node belongs to a hidden ontology and must not be shown.
         cy.nodes().forEach((n) => {
+          if (n.data("virtualRoot")) return;
           if (n.style("display") === "none") return; // already hidden
           if (n.data("sourceOntologyId") === null && !n.data("linked")) {
             n.style("display", "none");
@@ -952,6 +1064,7 @@ export default function GraphView() {
 
         // ── Edge visibility ────────────────────────────────────────────────────
         cy.edges().forEach((e) => {
+          if (e.data("virtualRoot")) return;
           const kind = e.data("kind");
           const lbl = (e.data("label") || "").toLowerCase();
           // Edge categorization:
@@ -1530,6 +1643,7 @@ export default function GraphView() {
           });
         }
         cy.edges("[?selfLoop]").addClass("layout-hidden");
+        syncVirtualRoot(cy, layoutRef.current);
         cy.elements(":visible").layout(getLayout(layoutRef.current, cy)).run();
       })
       .catch((e) => {
@@ -1551,6 +1665,7 @@ export default function GraphView() {
     if (!cy?.nodes().length) return;
     layoutRunRef.current?.stop();
     cy.edges("[?selfLoop]").addClass("layout-hidden");
+    syncVirtualRoot(cy, layout);
     layoutRunRef.current = cy.elements(":visible").layout(getLayout(layout, cy));
     layoutRunRef.current.run();
   }, [layout]);
@@ -1582,6 +1697,7 @@ export default function GraphView() {
       // the user types quickly in the filter box.
       layoutRunRef.current?.stop();
       cy.edges("[?selfLoop]").addClass("layout-hidden");
+      syncVirtualRoot(cy, layoutRef.current);
       layoutRunRef.current = cy.elements(":visible").layout(getLayout(layoutRef.current, cy));
       layoutRunRef.current.run();
     }
