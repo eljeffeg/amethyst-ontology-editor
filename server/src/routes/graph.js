@@ -422,10 +422,12 @@ router.get("/", requireAuth, resolveOntology, requireProjectRole("viewer"), (req
         ${fromNamed}
         WHERE {
           VALUES ?g { ${graphValues} }
-          GRAPH ?g { ?i a owl:NamedIndividual . FILTER(!isBlank(?i)) }
-          OPTIONAL { ?i a ?t FILTER(?t != owl:NamedIndividual && !isBlank(?t)) }
-          OPTIONAL { ?i rdfs:label ?label }
-          OPTIONAL { ?i skos:prefLabel ?prefLabel }
+          GRAPH ?g {
+            ?i a owl:NamedIndividual . FILTER(!isBlank(?i))
+            OPTIONAL { ?i a ?t FILTER(?t != owl:NamedIndividual && !isBlank(?t)) }
+            OPTIONAL { ?i rdfs:label ?label }
+            OPTIONAL { ?i skos:prefLabel ?prefLabel }
+          }
         } LIMIT ${limit}`,
         scope,
       );
