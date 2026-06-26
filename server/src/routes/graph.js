@@ -496,6 +496,122 @@ router.get("/", requireAuth, resolveOntology, requireProjectRole("viewer"), (req
         iri: r.p.value,
       });
     }
+
+    // ── subClassOf + objectProperty edges between visible class nodes ─────
+    // In individuals mode, class nodes are added as rdf:type targets but the
+    // classes block never runs — so hierarchy and property edges are missing.
+    // Object properties are often inherited (domain = ancestor class, not the
+    // direct type), so we build a transitive ancestor map and surface inherited
+    // properties on the visible (direct-type) class nodes.
+    if (mode === "individuals") {
+      const classIriSet = new Set(
+        [...nodes.values()].filter((n) => n.kind === "class").map((n) => n.id),
+      );
+      if (classIriSet.size > 0) {
+        const subRows = cachedSelect(
+          PREFIXES +
+            `
+          SELECT ?child ?parent WHERE {
+            ?child rdfs:subClassOf ?parent .
+            FILTER(!isBlank(?child) && isIRI(?child) && isIRI(?parent))
+            FILTER(?child != ?parent)
+          } LIMIT ${limit}
+        `,
+          effectiveScope,
+        );
+
+        // Add subClassOf edges between visible classes.
+        for (const r of subRows) {
+          if (!classIriSet.has(r.child.value) || !classIriSet.has(r.parent.value)) continue;
+          edges.push({
+            id: `${r.child.value}->${r.parent.value}:sub`,
+            source: r.child.value,
+            target: r.parent.value,
+            label: "subClassOf",
+            kind: "subClassOf",
+          });
+        }
+
+        // Build parent lookup for ancestor BFS.
+        const parentsOf = new Map();
+        for (const r of subRows) {
+          if (!parentsOf.has(r.child.value)) parentsOf.set(r.child.value, new Set());
+          parentsOf.get(r.child.value).add(r.parent.value);
+        }
+
+        // visibleDescendantsOf[ancestorIri] = [visible class IRIs that descend from it].
+        // Used to map inherited property domain/range back to visible class nodes.
+        const visibleDescendantsOf = new Map();
+        for (const visClass of classIriSet) {
+          const visited = new Set();
+          const queue = [visClass];
+          while (queue.length > 0) {
+            const cur = queue.shift();
+            if (visited.has(cur)) continue;
+            visited.add(cur);
+            if (!visibleDescendantsOf.has(cur)) visibleDescendantsOf.set(cur, []);
+            visibleDescendantsOf.get(cur).push(visClass);
+            for (const p of parentsOf.get(cur) || []) {
+              if (!visited.has(p)) queue.push(p);
+            }
+          }
+        }
+
+        const propRows = cachedSelect(
+          PREFIXES +
+            `
+          SELECT ?p ?plabel ?pprefLabel ?domain ?range WHERE {
+            ?p a owl:ObjectProperty .
+            { ?p rdfs:domain ?domain } UNION { ?p schema:domainIncludes ?domain } UNION { ?p schemas:domainIncludes ?domain }
+            { ?p rdfs:range  ?range  } UNION { ?p schema:rangeIncludes  ?range  } UNION { ?p schemas:rangeIncludes  ?range  }
+            FILTER(!isBlank(?domain) && !isBlank(?range))
+            OPTIONAL { ?p rdfs:label ?plabel }
+            OPTIONAL { ?p skos:prefLabel ?pprefLabel }
+          } LIMIT ${limit}
+        `,
+          effectiveScope,
+        );
+
+        // Show an objectProperty edge when AT LEAST ONE side (domain or range)
+        // has a visible individual class.  If the other side has no visible
+        // descendants, add its class node directly so the edge can be drawn.
+        // Example: ClassA categorizedBy ClassB — IndividualA a ClassB.
+        // ClassA has no individuals but should appear because its range does.
+        const propEdgeIdSet = new Set(edges.map((e) => e.id));
+        for (const r of propRows) {
+          const domainDescendants = visibleDescendantsOf.get(r.domain.value) || [];
+          const rangeDescendants = visibleDescendantsOf.get(r.range.value) || [];
+          // Skip only when neither side has any connection to a visible individual class.
+          if (domainDescendants.length === 0 && rangeDescendants.length === 0) continue;
+          // Domain: use visible descendants or add the class node directly.
+          let domainSources;
+          if (domainDescendants.length > 0) {
+            domainSources = domainDescendants;
+          } else {
+            addNode(r.domain.value, "class", null, classFallbackSrcId);
+            domainSources = [r.domain.value];
+          }
+          // Range: use visible descendants or add the class node directly.
+          let rangeTargets;
+          if (rangeDescendants.length > 0) {
+            rangeTargets = rangeDescendants;
+          } else {
+            addNode(r.range.value, "class", null, classFallbackSrcId);
+            rangeTargets = [r.range.value];
+          }
+          const label = r.pprefLabel?.value || r.plabel?.value || shortLabel(r.p.value);
+          for (const src of domainSources) {
+            for (const tgt of rangeTargets) {
+              if (src === tgt) continue;
+              const edgeId = `${src}->${tgt}:${r.p.value}`;
+              if (propEdgeIdSet.has(edgeId)) continue;
+              edges.push({ id: edgeId, source: src, target: tgt, label, kind: "objectProperty", iri: r.p.value });
+              propEdgeIdSet.add(edgeId);
+            }
+          }
+        }
+      }
+    }
   }
 
   if (mode === "properties") {

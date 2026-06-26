@@ -147,12 +147,13 @@ const STYLES = [
     },
   },
 
-  // ── individual: distinct text color; gradient/border from node data ──────
+  // ── individual: ellipse shape so it's visually distinct from class rectangles ──
   {
     selector: 'node[kind = "individual"]',
     style: {
-      shape: "round-rectangle",
+      shape: "ellipse",
       color: PALETTE.indText,
+      "underlay-shape": "ellipse",
       "underlay-opacity": 0.4,
     },
   },
@@ -844,7 +845,7 @@ export default function GraphView() {
               const kindOk =
                 ef === "both" ||
                 (ef === "hierarchy" && (k === "subClassOf" || k === "type")) ||
-                (ef === "relationships" && (k === "objectProperty" || k === "relation"));
+                (ef === "relationships" && (k === "objectProperty" || k === "relation" || k === "type"));
               if (!kindOk) return false;
               const isEquiv =
                 k === "equivalentClass" ||
@@ -888,12 +889,11 @@ export default function GraphView() {
           const lbl = (e.data("label") || "").toLowerCase();
           // Edge categorization:
           //   hierarchy     → subClassOf (class↔class) + type (individual→class rdf:type)
-          //   relationships → objectProperty (class↔class) + relation (individual↔individual)
-          // rdf:type is taxonomic so it groups with subClassOf under hierarchy.
+          //   relationships → objectProperty (class↔class) + relation (individual↔individual) + type
           const kindOk =
             ef === "both" ||
             (ef === "hierarchy" && (kind === "subClassOf" || kind === "type")) ||
-            (ef === "relationships" && (kind === "objectProperty" || kind === "relation"));
+            (ef === "relationships" && (kind === "objectProperty" || kind === "relation" || kind === "type"));
           const isInverseEdge =
             hideInv &&
             (kind === "inverseOf" ||
