@@ -1,6 +1,6 @@
 import { Bot, ChevronDown, CircleDot, Menu, MessageSquare, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, useLocation } from "react-router";
 import { GitHubIcon, useAuth } from "../App.jsx";
 import { api, term } from "../lib/api.js";
 import AdminView from "./AdminView.jsx";

@@ -10,7 +10,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { allowedCharacteristics, api, parseIriFromHash, shortLabel, term } from "../lib/api.js";
 import { BUILTIN_DATATYPES } from "../lib/datatypes.js";
 import { Field, LinkedEntityBanner, Modal } from "./ClassesView.jsx";

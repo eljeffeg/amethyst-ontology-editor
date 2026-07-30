@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import {
   ANNOTATION_PREDICATE_IRIS,
   AXIOM_PREDICATE_IRIS,

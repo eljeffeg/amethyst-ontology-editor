@@ -25,7 +25,7 @@ import {
   useState,
 } from "react";
 import { createPortal, flushSync } from "react-dom";
-import { NavLink } from "react-router-dom";
+import { NavLink } from "react-router";
 import { useAuth } from "../App.jsx";
 import {
   api,

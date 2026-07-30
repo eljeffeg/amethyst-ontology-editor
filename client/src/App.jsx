@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router";
 import AppShell from "./components/AppShell.jsx";
 import AuthView from "./components/AuthView.jsx";
 import InviteAcceptView from "./components/InviteAcceptView.jsx";

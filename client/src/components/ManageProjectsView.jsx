@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { useAuth } from "../App.jsx";
 import { api } from "../lib/api.js";
 import { getOntologyColor } from "../lib/ontologyColors.js";

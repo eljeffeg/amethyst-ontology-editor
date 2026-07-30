@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { api, parseIriFromHash, shortLabel } from "../lib/api.js";
 import { BUILTIN_DATATYPE_IRI_SET, BUILTIN_DATATYPES } from "../lib/datatypes.js";
 import { Field, Modal } from "./ClassesView.jsx";

@@ -1,6 +1,6 @@
 import { Eye, GitBranch, ListOrdered, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { api, parseIriFromHash, shortLabel, term } from "../lib/api.js";
 import EntityDetail from "./EntityDetail.jsx";
 import { useProject } from "./OntologyPicker.jsx";

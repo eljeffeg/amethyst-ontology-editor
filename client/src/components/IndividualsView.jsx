@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { api, parseIriFromHash, shortLabel, term } from "../lib/api.js";
 import { Field, Modal } from "./ClassesView.jsx";
 import EntityDetail from "./EntityDetail.jsx";

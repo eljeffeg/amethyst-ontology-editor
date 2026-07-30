@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.2",
     "better-sqlite3-session-store": "^0.1.0",
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
@@ -26,6 +26,6 @@
     "uuid": "^14.0.1"
   },
   "allowScripts": {
-    "better-sqlite3@12.11.1": true
+    "better-sqlite3@13.0.2": true
   }
 }

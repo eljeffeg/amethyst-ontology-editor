@@ -1,6 +1,6 @@
 import { Disc, MessageSquare, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useAuth } from "../App.jsx";
 import { api, shortLabel } from "../lib/api.js";
 import { Thread } from "./Comments.jsx";

@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { GitHubIcon, useAuth } from "../App.jsx";
 import { api, getTerminology, setTerminology } from "../lib/api.js";
 import { useProject } from "./OntologyPicker.jsx";
